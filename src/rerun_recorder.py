@@ -6,11 +6,10 @@ from typing import List, Tuple
 import numpy as np
 import numpy.typing as npt
 import rerun as rr
-from rerun_loader_urdf import URDFLogger
-from urdf_parser_py import urdf
-
 from reachy2_sdk import ReachySDK
 from reachy2_sdk.media.camera import CameraView
+from rerun_loader_urdf import URDFLogger
+from urdf_parser_py import urdf
 
 
 def _log_camera_parameters(side: CameraView) -> Tuple[int, int, npt.NDArray[np.uint8]]:
