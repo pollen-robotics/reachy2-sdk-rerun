@@ -235,13 +235,13 @@ if __name__ == "__main__":
     try:
         while True:
             rr.set_time_nanos("reachy_ROS_time", reachy.get_update_timestamp())
-            rpy_head = np.deg2rad(reachy.head.get_joints_positions())
+            rpy_head = np.deg2rad(reachy.head.get_current_positions())
             _log_head_poses(rpy_head, urdf_logger)
 
-            l_arm_pos = reachy.l_arm.get_joints_positions(degrees=False)
+            l_arm_pos = reachy.l_arm.get_current_positions(degrees=False)
             _log_arm_joints_poses(l_arm_pos, urdf_logger, True)
 
-            r_arm_pos = reachy.r_arm.get_joints_positions(degrees=False)
+            r_arm_pos = reachy.r_arm.get_current_positions(degrees=False)
             _log_arm_joints_poses(r_arm_pos, urdf_logger, False)
 
             _log_gripper(left=True)
