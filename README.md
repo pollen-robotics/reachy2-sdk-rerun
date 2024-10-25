@@ -31,3 +31,8 @@ python src/rerun_recorder.py --urdf reachy2.urdf
 ```
 
 You should see something like ![image](docs/rerun_screenshot.png)
+
+> If the rerun page doesn't launch, you maybe have an issue of graphic driver (<code>Error: WGPU error: There was no valid format for the surface at all.</code>). If so, you can use this command : 
+> ```
+WAYLAND_DISPLAY= python src/rerun_recorder.py --urdf reachy2.urdf
+```
