@@ -242,7 +242,7 @@ def main_loop(args: argparse.Namespace) -> None:
     rr.log("reachy/r_arm/wrist/gripper", rr.SeriesLine(color=[0, 255, 0], name="right gripper", width=2), static=True)
 
     try:
-        sampling_mvt = 1.0 / args.rec_freq
+        sampling_rate = 1.0 / args.rec_freq
 
         while True:
             rr.set_time_nanos("reachy_ROS_time", reachy.get_update_timestamp())
@@ -266,7 +266,7 @@ def main_loop(args: argparse.Namespace) -> None:
                 _log_depth_color_cameras(height_depth, width_depth, K_color_depth, name_joint_depth_color_cam, reachy)
                 _log_depth_cameras(height_depth, width_depth, K_depth, name_joint_depth_cam, reachy)
 
-            time.sleep(sampling_mvt)
+            time.sleep(sampling_rate)
 
     except KeyboardInterrupt:
         logging.info("User Interrupt")
