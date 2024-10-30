@@ -207,8 +207,8 @@ def main_loop(args: argparse.Namespace) -> None:
 
     check_reachy(reachy)
 
-    rr.init("recorder_example", spawn=True, recording_id=uuid4())
-    rr.connect()
+    rr.init("recorder_example", recording_id=uuid4())
+    rr.spawn(memory_limit="50%")
     if args.save:
         rr.save(path=args.save)
 
@@ -279,9 +279,9 @@ if __name__ == "__main__":
     parser.add_argument("--urdf", type=str, required=True, help="reachy2.urdf")
     parser.add_argument("--ip", type=str, default="localhost", help="IP address of the ReachySDK host")
     parser.add_argument("--save", type=str, help="path to save the data")
-    parser.add_argument("--teleop_camera", action="store_true", help="Enable teleop camera")
-    parser.add_argument("--depth_camera", action="store_true", help="Enable depth camera")
-    parser.add_argument("--rec_freq", type=int, default=50, help="recording frequency (Hz)")
+    parser.add_argument("--teleop_camera", action="store_true", help="Enable recording of teleop camera")
+    parser.add_argument("--depth_camera", action="store_true", help="Enable recording of depth camera")
+    parser.add_argument("--rec_freq", type=int, default=5, help="recording frequency (Hz)")
     args = parser.parse_args()
 
     main_loop(args)
