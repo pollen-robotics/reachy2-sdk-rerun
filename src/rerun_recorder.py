@@ -2,6 +2,7 @@ import argparse
 import logging
 import time
 from typing import List, Tuple
+from uuid import uuid4
 
 import numpy as np
 import numpy.typing as npt
@@ -12,7 +13,7 @@ from rerun_loader_urdf import URDFLogger
 from urdf_parser_py import urdf
 
 
-def _log_camera_parameters(side: CameraView) -> Tuple[int, int, npt.NDArray[np.uint8]]:
+def _log_camera_parameters(side: CameraView, reachy: ReachySDK) -> Tuple[int, int, npt.NDArray[np.uint8]]:
     side_str = "right"
     if side == CameraView.LEFT:
         side_str = "left"
@@ -31,7 +32,9 @@ def _log_camera_parameters(side: CameraView) -> Tuple[int, int, npt.NDArray[np.u
     return height, width, K
 
 
-def _log_teleop_cameras(height: int, width: int, K: npt.NDArray[np.uint8], joint_cam: str, side: CameraView) -> None:
+def _log_teleop_cameras(
+    height: int, width: int, K: npt.NDArray[np.uint8], joint_cam: str, side: CameraView, reachy: ReachySDK
+) -> None:
     frame, ts = reachy.cameras.teleop.get_compressed_frame(side)
 
     rr.set_time_nanos("reachy_ROS_time", ts)
@@ -50,7 +53,7 @@ def _log_teleop_cameras(height: int, width: int, K: npt.NDArray[np.uint8], joint
     )
 
 
-def _log_depth_camera_parameters(side: CameraView) -> Tuple[int, int, npt.NDArray[np.uint8]]:
+def _log_depth_camera_parameters(side: CameraView, reachy: ReachySDK) -> Tuple[int, int, npt.NDArray[np.uint8]]:
     side_str = "color"
     if side == CameraView.DEPTH:
         side_str = "depth"
@@ -69,7 +72,7 @@ def _log_depth_camera_parameters(side: CameraView) -> Tuple[int, int, npt.NDArra
     return height, width, K
 
 
-def _log_depth_color_cameras(height: int, width: int, K: npt.NDArray[np.uint8], joint_cam: str) -> None:
+def _log_depth_color_cameras(height: int, width: int, K: npt.NDArray[np.uint8], joint_cam: str, reachy: ReachySDK) -> None:
     frame, ts = reachy.cameras.depth.get_compressed_frame(CameraView.LEFT)
 
     rr.set_time_nanos("reachy_ROS_time", ts)
@@ -88,7 +91,7 @@ def _log_depth_color_cameras(height: int, width: int, K: npt.NDArray[np.uint8], 
     )
 
 
-def _log_depth_cameras(height: int, width: int, K: npt.NDArray[np.uint8], joint_cam: str) -> None:
+def _log_depth_cameras(height: int, width: int, K: npt.NDArray[np.uint8], joint_cam: str, reachy: ReachySDK) -> None:
     frame, ts = reachy.cameras.depth.get_depth_frame(CameraView.DEPTH)
 
     rr.set_time_nanos("reachy_ROS_time", ts)
@@ -161,7 +164,7 @@ def _log_head_poses(rpy_head: List[float], urdf_logger: URDFLogger) -> None:
     urdf_logger.log_joint(urdf_logger.joint_entity_path(joint), joint=joint)
 
 
-def _log_gripper(left: bool) -> None:
+def _log_gripper(left: bool, reachy: ReachySDK, urdf_logger: URDFLogger) -> None:
     side = "r"
     part = reachy.r_arm
     if left:
@@ -190,20 +193,24 @@ def _log_gripper(left: bool) -> None:
     urdf_logger.log_joint(urdf_logger.joint_entity_path(joint), joint=joint)
 
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--urdf", type=str, required=True, help="reachy2.urdf")
-    args = parser.parse_args()
-
-    reachy = ReachySDK(host="localhost")
-
-    rr.init("recorder_example", spawn=True)
-    rr.connect()
-
-    if not reachy.is_connected:
+def check_reachy(reachy: ReachySDK) -> None:
+    if not reachy.is_connected():
         exit("Reachy is not connected.")
+    elif args.teleop_camera and reachy.cameras.teleop is None:
+        exit("Teleop camera is not connected.")
+    elif args.depth_camera and reachy.cameras.depth is None:
+        exit("Depth camera is not connected.")
+
+
+def main_loop(args: argparse.Namespace) -> None:
+    reachy = ReachySDK(host=args.ip)
+
+    check_reachy(reachy)
+
+    rr.init("recorder_example", recording_id=uuid4())
+    rr.spawn(memory_limit="50%")
+    if args.save:
+        rr.save(path=args.save)
 
     torso_entity = "world/world_joint/base_link/back_bar_joint/back_bar/torso_base/torso"
 
@@ -213,26 +220,30 @@ if __name__ == "__main__":
 
     urdf_logger.log()
 
-    height, width, K_left = _log_camera_parameters(CameraView.LEFT)
-    _, _, K_right = _log_camera_parameters(CameraView.RIGHT)
-    joint_left_cam = _get_joints("left_camera_optical_joint", urdf_logger.urdf)
-    name_joint_left_cam = urdf_logger.joint_entity_path(joint_left_cam)
-    joint_right_cam = _get_joints("right_camera_optical_joint", urdf_logger.urdf)
-    name_joint_right_cam = urdf_logger.joint_entity_path(joint_right_cam)
+    if args.teleop_camera:
+        height, width, K_left = _log_camera_parameters(CameraView.LEFT, reachy)
+        _, _, K_right = _log_camera_parameters(CameraView.RIGHT, reachy)
+        joint_left_cam = _get_joints("left_camera_optical_joint", urdf_logger.urdf)
+        name_joint_left_cam = urdf_logger.joint_entity_path(joint_left_cam)
+        joint_right_cam = _get_joints("right_camera_optical_joint", urdf_logger.urdf)
+        name_joint_right_cam = urdf_logger.joint_entity_path(joint_right_cam)
 
-    height_depth, width_depth, K_color_depth = _log_depth_camera_parameters(CameraView.LEFT)
-    _, _, K_depth = _log_depth_camera_parameters(CameraView.DEPTH)
-    # ToDo : fix names for depth camera
-    joint_depth_color_cam = _get_joints("depth_cam_l_optical_joint", urdf_logger.urdf)
-    name_joint_depth_color_cam = urdf_logger.joint_entity_path(joint_depth_color_cam)
-    joint_depth_cam = _get_joints("depth_cam_r_optical_joint", urdf_logger.urdf)
-    name_joint_depth_cam = urdf_logger.joint_entity_path(joint_depth_cam)
+    if args.depth_camera:
+        height_depth, width_depth, K_color_depth = _log_depth_camera_parameters(CameraView.LEFT, reachy)
+        _, _, K_depth = _log_depth_camera_parameters(CameraView.DEPTH, reachy)
+        # ToDo : fix names for depth camera
+        joint_depth_color_cam = _get_joints("depth_cam_l_optical_joint", urdf_logger.urdf)
+        name_joint_depth_color_cam = urdf_logger.joint_entity_path(joint_depth_color_cam)
+        joint_depth_cam = _get_joints("depth_cam_r_optical_joint", urdf_logger.urdf)
+        name_joint_depth_cam = urdf_logger.joint_entity_path(joint_depth_cam)
 
     # configure vizualisers
     rr.log("reachy/l_arm/wrist/gripper", rr.SeriesLine(color=[255, 0, 0], name="left gripper", width=2), static=True)
     rr.log("reachy/r_arm/wrist/gripper", rr.SeriesLine(color=[0, 255, 0], name="right gripper", width=2), static=True)
 
     try:
+        sampling_rate = 1.0 / args.rec_freq
+
         while True:
             rr.set_time_nanos("reachy_ROS_time", reachy.get_update_timestamp())
             rpy_head = np.deg2rad(reachy.head.get_current_positions())
@@ -244,16 +255,33 @@ if __name__ == "__main__":
             r_arm_pos = reachy.r_arm.get_current_positions(degrees=False)
             _log_arm_joints_poses(r_arm_pos, urdf_logger, False)
 
-            _log_gripper(left=True)
-            _log_gripper(left=False)
+            _log_gripper(left=True, reachy=reachy, urdf_logger=urdf_logger)
+            _log_gripper(left=False, reachy=reachy, urdf_logger=urdf_logger)
 
-            _log_teleop_cameras(height, width, K_left, name_joint_left_cam, CameraView.LEFT)
-            _log_teleop_cameras(height, width, K_right, name_joint_right_cam, CameraView.RIGHT)
+            if args.teleop_camera:
+                _log_teleop_cameras(height, width, K_left, name_joint_left_cam, CameraView.LEFT, reachy)
+                _log_teleop_cameras(height, width, K_right, name_joint_right_cam, CameraView.RIGHT, reachy)
 
-            _log_depth_color_cameras(height_depth, width_depth, K_color_depth, name_joint_depth_color_cam)
-            _log_depth_cameras(height_depth, width_depth, K_depth, name_joint_depth_cam)
+            if args.depth_camera:
+                _log_depth_color_cameras(height_depth, width_depth, K_color_depth, name_joint_depth_color_cam, reachy)
+                _log_depth_cameras(height_depth, width_depth, K_depth, name_joint_depth_cam, reachy)
 
-            time.sleep(0.2)
+            time.sleep(sampling_rate)
 
     except KeyboardInterrupt:
         logging.info("User Interrupt")
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--urdf", type=str, required=True, help="reachy2.urdf")
+    parser.add_argument("--ip", type=str, default="localhost", help="IP address of the ReachySDK host")
+    parser.add_argument("--save", type=str, help="path to save the data")
+    parser.add_argument("--teleop_camera", action="store_true", help="Enable recording of teleop camera")
+    parser.add_argument("--depth_camera", action="store_true", help="Enable recording of depth camera")
+    parser.add_argument("--rec_freq", type=int, default=5, help="recording frequency (Hz)")
+    args = parser.parse_args()
+
+    main_loop(args)
