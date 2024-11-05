@@ -27,7 +27,7 @@ The ROS path points to Reachy 2 workspace with the repo [listed here](https://gi
 ### start rerun
 
 ```
-python src/rerun_recorder.py --urdf reachy2.urdf --teleop_camera --depth_camera
+python src/rerun_recorder.py --urdf reachy2.urdf --teleop_camera --depth_camera --ip localhost
 ```
 
 You should see something like ![image](docs/rerun_screenshot.png)
