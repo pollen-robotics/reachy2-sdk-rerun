@@ -19,7 +19,8 @@ Include *[dev]* for optional development tools.
 The following command will generate *reachy2.urdf*.
 
 ```
-python src/generate_urdf.py --ros_path <path>
+python src/generate_urdf.py --xacro_file <path>/reachy.urdf.xacro --ros_path <path> --model dvt
+
 ```
 
 The ROS path points to Reachy 2 workspace with the repo [listed here](https://github.com/pollen-robotics/docker_reachy2_core/blob/develop/sources_config/beta.src). There is no need for a ROS system to run this script. These repos can be checkout out anywhere. [vcstool](https://github.com/dirk-thomas/vcstool) can be used to clone all of them at once. 
