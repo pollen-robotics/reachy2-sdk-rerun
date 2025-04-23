@@ -6,11 +6,12 @@ from uuid import uuid4
 
 import numpy as np
 import numpy.typing as npt
-import rerun as rr
 from reachy2_sdk import ReachySDK
 from reachy2_sdk.media.camera import CameraView
 from rerun_loader_python_example_urdf import URDFLogger
 from urdf_parser_py import urdf
+
+import rerun as rr
 
 
 def _log_camera_parameters(side: CameraView, reachy: ReachySDK) -> Tuple[int, int, npt.NDArray[np.uint8]]:
@@ -208,7 +209,9 @@ def main_loop(args: argparse.Namespace) -> None:
     check_reachy(reachy)
 
     rr.init("recorder_example", recording_id=uuid4())
-    rr.spawn(memory_limit="50%")
+    # rr.spawn(memory_limit="50%")
+    # rr.serve_web(open_browser=False, ws_port=4321, server_memory_limit="12MB")
+    rr.serve_web(open_browser=False, ws_port=4321)
     if args.save:
         rr.save(path=args.save)
 
@@ -245,6 +248,8 @@ def main_loop(args: argparse.Namespace) -> None:
         sampling_rate = 1.0 / args.rec_freq
 
         while True:
+            loop_start = time.monotonic()
+
             rr.set_time_nanos("reachy_ROS_time", reachy.get_update_timestamp())
             rpy_head = np.deg2rad(reachy.head.get_current_positions())
             _log_head_poses(rpy_head, urdf_logger)
@@ -266,7 +271,13 @@ def main_loop(args: argparse.Namespace) -> None:
                 _log_depth_color_cameras(height_depth, width_depth, K_color_depth, name_joint_depth_color_cam, reachy)
                 _log_depth_cameras(height_depth, width_depth, K_depth, name_joint_depth_cam, reachy)
 
-            time.sleep(sampling_rate)
+            elapsed = time.monotonic() - loop_start
+            sleep_time = sampling_rate - elapsed
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+                # print(f"Sleeping for {sleep_time:.3f} seconds")
+            else:
+                print(f"Loop took too long: {elapsed:.3f} seconds")
 
     except KeyboardInterrupt:
         logging.info("User Interrupt")
