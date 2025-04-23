@@ -9,7 +9,7 @@ import numpy.typing as npt
 import rerun as rr
 from reachy2_sdk import ReachySDK
 from reachy2_sdk.media.camera import CameraView
-from rerun_loader_urdf import URDFLogger
+from rerun_loader_python_example_urdf import URDFLogger
 from urdf_parser_py import urdf
 
 
@@ -284,4 +284,5 @@ if __name__ == "__main__":
     parser.add_argument("--rec_freq", type=int, default=5, help="recording frequency (Hz)")
     args = parser.parse_args()
 
+    main_loop(args)
     main_loop(args)
