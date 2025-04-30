@@ -1,5 +1,6 @@
 import argparse
 import logging
+import threading
 import time
 from typing import List, Tuple
 from uuid import uuid4
@@ -203,46 +204,56 @@ def check_reachy(reachy: ReachySDK) -> None:
         exit("Depth camera is not connected.")
 
 
+# TODO fix usage of height, width, K_left, K_right
+def refresh_static_data(urdf_logger: URDFLogger, args, reachy) -> None:
+    while True:
+        rr.set_time_nanos("reachy_ROS_time", reachy.get_update_timestamp())
+
+        urdf_logger.log()
+
+        if args.teleop_camera:
+            height, width, K_left = _log_camera_parameters(CameraView.LEFT, reachy)
+            _, _, K_right = _log_camera_parameters(CameraView.RIGHT, reachy)
+            joint_left_cam = _get_joints("left_camera_optical_joint", urdf_logger.urdf)
+            name_joint_left_cam = urdf_logger.joint_entity_path(joint_left_cam)
+            joint_right_cam = _get_joints("right_camera_optical_joint", urdf_logger.urdf)
+            name_joint_right_cam = urdf_logger.joint_entity_path(joint_right_cam)
+
+        if args.depth_camera:
+            height_depth, width_depth, K_color_depth = _log_depth_camera_parameters(CameraView.LEFT, reachy)
+            _, _, K_depth = _log_depth_camera_parameters(CameraView.DEPTH, reachy)
+            # ToDo : fix names for depth camera
+            joint_depth_color_cam = _get_joints("depth_cam_l_optical_joint", urdf_logger.urdf)
+            name_joint_depth_color_cam = urdf_logger.joint_entity_path(joint_depth_color_cam)
+            joint_depth_cam = _get_joints("depth_cam_r_optical_joint", urdf_logger.urdf)
+            name_joint_depth_cam = urdf_logger.joint_entity_path(joint_depth_cam)
+
+        # configure vizualisers
+        rr.log("reachy/l_arm/wrist/gripper", rr.SeriesLine(color=[255, 0, 0], name="left gripper", width=2), static=True)
+        rr.log("reachy/r_arm/wrist/gripper", rr.SeriesLine(color=[0, 255, 0], name="right gripper", width=2), static=True)
+        print(f"[rerun] Static data refreshed at {time.strftime('%H:%M:%S')}")
+        time.sleep(4.0)
+
+
 def main_loop(args: argparse.Namespace) -> None:
     reachy = ReachySDK(host=args.ip)
 
     check_reachy(reachy)
 
-    rr.init("recorder_example", recording_id=uuid4())
-    # rr.spawn(memory_limit="50%")
-    # rr.serve_web(open_browser=False, ws_port=4321, server_memory_limit="12MB")
-    rr.serve_web(open_browser=False, ws_port=4321)
+    rr.init("recorder_example", spawn=False)
+    rr.serve_web(open_browser=False, ws_port=4321, server_memory_limit="0MB")
+
     if args.save:
+
         rr.save(path=args.save)
 
     torso_entity = "world/world_joint/base_link/back_bar_joint/back_bar/torso_base/torso"
 
     urdf_logger = URDFLogger(args.urdf, torso_entity)
-
     rr.set_time_nanos("reachy_ROS_time", reachy.get_update_timestamp())
 
-    urdf_logger.log()
-
-    if args.teleop_camera:
-        height, width, K_left = _log_camera_parameters(CameraView.LEFT, reachy)
-        _, _, K_right = _log_camera_parameters(CameraView.RIGHT, reachy)
-        joint_left_cam = _get_joints("left_camera_optical_joint", urdf_logger.urdf)
-        name_joint_left_cam = urdf_logger.joint_entity_path(joint_left_cam)
-        joint_right_cam = _get_joints("right_camera_optical_joint", urdf_logger.urdf)
-        name_joint_right_cam = urdf_logger.joint_entity_path(joint_right_cam)
-
-    if args.depth_camera:
-        height_depth, width_depth, K_color_depth = _log_depth_camera_parameters(CameraView.LEFT, reachy)
-        _, _, K_depth = _log_depth_camera_parameters(CameraView.DEPTH, reachy)
-        # ToDo : fix names for depth camera
-        joint_depth_color_cam = _get_joints("depth_cam_l_optical_joint", urdf_logger.urdf)
-        name_joint_depth_color_cam = urdf_logger.joint_entity_path(joint_depth_color_cam)
-        joint_depth_cam = _get_joints("depth_cam_r_optical_joint", urdf_logger.urdf)
-        name_joint_depth_cam = urdf_logger.joint_entity_path(joint_depth_cam)
-
-    # configure vizualisers
-    rr.log("reachy/l_arm/wrist/gripper", rr.SeriesLine(color=[255, 0, 0], name="left gripper", width=2), static=True)
-    rr.log("reachy/r_arm/wrist/gripper", rr.SeriesLine(color=[0, 255, 0], name="right gripper", width=2), static=True)
+    # Routine to refresh static data for new clients since server memory is set to 0MB
+    threading.Thread(target=refresh_static_data, args=(urdf_logger, args, reachy), daemon=True).start()
 
     try:
         sampling_rate = 1.0 / args.rec_freq
@@ -275,7 +286,6 @@ def main_loop(args: argparse.Namespace) -> None:
             sleep_time = sampling_rate - elapsed
             if sleep_time > 0:
                 time.sleep(sleep_time)
-                # print(f"Sleeping for {sleep_time:.3f} seconds")
             else:
                 print(f"Loop took too long: {elapsed:.3f} seconds")
 
